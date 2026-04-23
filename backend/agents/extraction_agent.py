@@ -46,20 +46,29 @@ class MedicalExtractionAgent:
         try:
 
             data_type = raw_data.get("data_type")
+            self.logger.debug(f"[ExtractionAgent] Data type: {data_type}")
 
             if data_type == "json":
                 content = raw_data.get("content", {})
                 prompt = f"Extract the medical profile from this structured patient data:\n{json.dumps(content, indent=2)}"
+                self.logger.debug(f"[ExtractionAgent] Processing structured JSON data")
             elif data_type in ["pdf", "image"]:
                 text = raw_data.get("extracted_text", "")
                 prompt = f"Extract the medical profile from this clinical text:\n{text}"
+                self.logger.debug(f"[ExtractionAgent] Processing {data_type.upper()} - text length: {len(text)} chars")
             else:
                 raise ValueError("Unsupported raw data format")
 
             profile = generate_json(EXTRACTION_SYSTEM_PROMPT, prompt)
 
+            # Validate the extracted profile
+            if not isinstance(profile, dict):
+                self.logger.warning(f"[ExtractionAgent] Extraction returned unexpected type: {type(profile)}")
+                profile = {}
+            
+            disease = profile.get("disease", "").strip()
             self.logger.info(
-                f"[ExtractionAgent] Extraction complete: {profile.get('disease', 'Unknown')}"
+                f"[ExtractionAgent] Extraction complete: disease='{disease}', age={profile.get('age')}, gender={profile.get('gender')}"
             )
 
             return {
@@ -70,7 +79,10 @@ class MedicalExtractionAgent:
 
         except Exception as e:
 
-            self.logger.error(f"[ExtractionAgent] Extraction failed: {str(e)}")
+            self.logger.error(
+                f"[ExtractionAgent] Extraction failed: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
 
             return {
                 "success": False,

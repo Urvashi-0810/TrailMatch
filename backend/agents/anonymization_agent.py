@@ -34,6 +34,13 @@ class AnonymizationAgent:
 
             anonymized_profile = self.utils.anonymize_patient_data(profile, patient_id)
 
+            # Extract disease/condition - use default if missing or empty
+            disease = anonymized_profile.get("disease", "").strip()
+            if not disease or disease.lower() == "unknown":
+                disease = "Unknown"
+            
+            self.logger.debug(f"[AnonymizationAgent] Extracted disease: '{disease}'")
+
             anonymized = AnonymizedPatientProfile(
 
                 patient_id=patient_id,
@@ -51,7 +58,7 @@ class AnonymizationAgent:
                     anonymized_profile.get("height_cm")
                 ),
 
-                conditions=[anonymized_profile.get("disease", "Unknown")] if anonymized_profile.get("disease") else [],
+                conditions=[disease] if disease != "Unknown" else ["Unspecified"],
 
                 lab_results=anonymized_profile.get("lab_results", {}),
 

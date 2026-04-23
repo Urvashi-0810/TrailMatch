@@ -85,14 +85,16 @@ class WebScrapingAgent:
 
         try:
             conditions = patient_data.get("conditions", [])
-            if not conditions:
-                return {
-                    "trials": [],
-                    "total_found": 0,
-                    "message": "No conditions provided"
-                }
+            self.logger.debug(f"[WebScrapingAgent] Received conditions: {conditions}")
+            
+            if not conditions or all(c in ["Unknown", "Unspecified", ""] for c in conditions):
+                self.logger.warning(
+                    f"[WebScrapingAgent] No valid conditions provided in patient data: {conditions}. Using fallback."
+                )
+                return self._create_fallback_trials(patient_data)
 
             primary_condition = conditions[0].lower()
+            self.logger.info(f"[WebScrapingAgent] Using primary condition: '{primary_condition}'")
 
             params = {
                 "query.cond": primary_condition,
@@ -104,15 +106,30 @@ class WebScrapingAgent:
                 f"[WebScrapingAgent] Querying ClinicalTrials.gov for: {primary_condition}"
             )
 
-            async with httpx.AsyncClient(timeout=15) as client:
-                response = await client.get(self.base_url, params=params)
-                response.raise_for_status()
-                data = response.json()
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    response = await client.get(self.base_url, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+            except httpx.HTTPStatusError as http_e:
+                self.logger.error(
+                    f"[WebScrapingAgent] HTTP error {http_e.response.status_code}: {http_e.response.text}"
+                )
+                raise
+            except httpx.RequestError as req_e:
+                self.logger.error(f"[WebScrapingAgent] Request failed: {req_e}")
+                raise
+            except Exception as parse_e:
+                self.logger.error(f"[WebScrapingAgent] Failed to parse response: {parse_e}")
+                raise
 
             trials = []
             studies = data.get("studies", [])
             if studies:
+                self.logger.info(f"[WebScrapingAgent] Processing {len(studies)} studies from API")
                 trials = self._process_all_studies(studies)
+            else:
+                self.logger.info("[WebScrapingAgent] No studies found in API response")
 
             self.logger.info(f"[WebScrapingAgent] Found {len(trials)} trials")
 
@@ -124,8 +141,9 @@ class WebScrapingAgent:
             }
 
         except Exception as e:
-            self.logger.warning(
-                f"[WebScrapingAgent] API failed, using fallback trials: {str(e)}"
+            self.logger.error(
+                f"[WebScrapingAgent] API call failed, falling back to mock trials. Error: {type(e).__name__}: {str(e)}",
+                exc_info=True
             )
             return self._create_fallback_trials(patient_data)
 
@@ -133,12 +151,21 @@ class WebScrapingAgent:
         """Use a single Gemini LLM call to parse all studies at once."""
         try:
             prompt = f"Parse these {len(studies)} ClinicalTrials.gov studies into structured format:\n\n{json.dumps(studies, indent=2, default=str)}"
+            self.logger.debug(f"[WebScrapingAgent] Sending {len(studies)} studies to Gemini for parsing")
             result = generate_json(STUDY_PARSER_SYSTEM_PROMPT, prompt)
+            
             if isinstance(result, list):
-                return [t for t in result if t]
+                valid_trials = [t for t in result if t]
+                self.logger.info(f"[WebScrapingAgent] Parsed {len(valid_trials)} valid trials from {len(studies)} studies")
+                return valid_trials
+            
+            self.logger.warning(f"[WebScrapingAgent] Unexpected result type from Gemini: {type(result)}")
             return [result] if result else []
         except Exception as e:
-            self.logger.warning(f"[WebScrapingAgent] Failed to process studies: {str(e)}")
+            self.logger.error(
+                f"[WebScrapingAgent] Failed to process studies with Gemini: {type(e).__name__}: {str(e)}",
+                exc_info=True
+            )
             return []
 
     def _create_fallback_trials(self, patient_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -146,13 +173,20 @@ class WebScrapingAgent:
         conditions = patient_data.get("conditions", [])
         primary_condition = conditions[0] if conditions else "general condition"
 
+        self.logger.warning(f"[WebScrapingAgent] Creating fallback trials for condition: {primary_condition}")
+
         try:
             prompt = f"Generate realistic mock clinical trials for a patient with: {primary_condition}"
+            self.logger.debug("[WebScrapingAgent] Calling Gemini to generate fallback trials")
             mock_trials = generate_json(FALLBACK_TRIALS_SYSTEM_PROMPT, prompt)
             if not isinstance(mock_trials, list):
                 mock_trials = [mock_trials]
+            self.logger.info(f"[WebScrapingAgent] Generated {len(mock_trials)} fallback trials via Gemini")
         except Exception as e:
-            self.logger.warning(f"[WebScrapingAgent] Fallback LLM failed: {str(e)}")
+            self.logger.error(
+                f"[WebScrapingAgent] Fallback Gemini call failed: {type(e).__name__}: {str(e)}. Using hardcoded fallback.",
+                exc_info=True
+            )
             mock_trials = [
                 {
                     "trial_id": f"MOCK-{uuid.uuid4().hex[:6]}",

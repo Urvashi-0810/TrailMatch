@@ -105,16 +105,15 @@ Copy `.env.example` to `.env` and update the values:
 cp .env.example .env
 ```
 
-Edit `.env` and add your OpenAI API key:
+Edit `.env` and add your Gemini API key:
 ```
-OPENAI_API_KEY=your_openai_api_key_here
 SECRET_KEY=your_secret_key_here
 ```
 
 ### 4. Run the Application
 
 ```bash
-python app.py
+flask run --debug
 ```
 
 The server will start at `http://localhost:5000`

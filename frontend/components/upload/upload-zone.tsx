@@ -95,7 +95,7 @@ export function UploadZone({ onFilesUploaded }: UploadZoneProps) {
       </Card>
 
       {/* Smart Scan Option */}
-      <Card className="border-accent/30 bg-accent/5">
+      {/* <Card className="border-accent/30 bg-accent/5">
         <CardContent className="flex items-center justify-between py-4">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
@@ -113,7 +113,7 @@ export function UploadZone({ onFilesUploaded }: UploadZoneProps) {
             Open Scanner
           </Button>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Uploaded Files List */}
       {files.length > 0 && (

@@ -88,7 +88,10 @@ export default function AnalyzePage() {
           risks: analysisData.trial_matches?.map((trial: any) => ({
             trial_name: trial.trial_name,
             risk_summary: trial.explanation?.overall_assessment || "",
-            identified_risks: trial.risks?.potential_risks || [],
+            identified_risks: [
+              ...(trial.risks?.side_effects || []),
+              ...(trial.risks?.long_term_effects || []),
+            ],
           })) || [],
           patientProfile: analysisData.patient || {},
         })
@@ -134,7 +137,10 @@ export default function AnalyzePage() {
           risks: analysisData.trial_matches?.map((trial: any) => ({
             trial_name: trial.trial_name,
             risk_summary: trial.explanation?.overall_assessment || "",
-            identified_risks: trial.risks?.potential_risks || [],
+            identified_risks: [
+              ...(trial.risks?.side_effects || []),
+              ...(trial.risks?.long_term_effects || []),
+            ],
           })) || [],
           patientProfile: analysisData.patient || {},
         })
@@ -326,7 +332,7 @@ export default function AnalyzePage() {
   // Results state
   if (state === "results" && results) {
     const sortedTrials = [...(results.trials || [])].sort(
-      (a, b) => (b.eligibility_score || 0) - (a.eligibility_score || 0)
+      (a, b) => (b.match_score || 0) - (a.match_score || 0)
     )
 
     return (
@@ -440,7 +446,7 @@ export default function AnalyzePage() {
               ) : (
                 sortedTrials.map((trial: any) => (
                   <Card
-                    key={trial.nct_id}
+                    key={trial.trial_id}
                     className="cursor-pointer transition-all hover:shadow-lg"
                     onClick={() => setSelectedTrial(trial)}
                   >
@@ -462,30 +468,26 @@ export default function AnalyzePage() {
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {trial.trial_description || "No description available"}
+                            {trial.details?.study_summary || "No description available"}
                           </p>
                           <div className="flex flex-wrap gap-2 pt-2">
-                            {trial.conditions && trial.conditions.length > 0 && (
-                              <>
-                                {trial.conditions.slice(0, 2).map((cond: string) => (
-                                  <Badge key={cond} variant="secondary" className="text-xs">
-                                    {cond}
-                                  </Badge>
-                                ))}
-                              </>
+                            {trial.disease_category && (
+                              <Badge variant="secondary" className="text-xs">
+                                {trial.disease_category}
+                              </Badge>
                             )}
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <div className="mb-2 text-2xl font-bold text-primary">
-                            {Math.round((trial.eligibility_score || 0) * 100)}%
+                            {Math.round((trial.match_score || 0) * 100)}%
                           </div>
                           <p className="text-xs text-muted-foreground">Match Score</p>
                         </div>
                       </div>
 
                       {/* Trial Details (Collapsible) */}
-                      {selectedTrial?.nct_id === trial.nct_id && (
+                      {selectedTrial?.trial_id === trial.trial_id && (
                         <div className="mt-6 space-y-4 border-t pt-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             {trial.location && (
@@ -506,73 +508,12 @@ export default function AnalyzePage() {
                             <p className="mb-2 text-sm font-medium text-muted-foreground">
                               Eligibility Criteria
                             </p>
-                            <Accordion type="single" collapsible className="w-full">
-                              <AccordionItem value="inclusion">
-                                <AccordionTrigger className="text-sm">
-                                  Inclusion Criteria
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  {trial.inclusion_criteria ? (
-                                    <ul className="space-y-2 text-sm">
-                                      {typeof trial.inclusion_criteria === "string"
-                                        ? trial.inclusion_criteria
-                                            .split("\n")
-                                            .map((criteria: string, idx: number) => (
-                                              <li key={idx} className="flex gap-2">
-                                                <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
-                                                <span>{criteria}</span>
-                                              </li>
-                                            ))
-                                        : Array.isArray(trial.inclusion_criteria)
-                                        ? trial.inclusion_criteria.map((criteria: string, idx: number) => (
-                                            <li key={idx} className="flex gap-2">
-                                              <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" />
-                                              <span>{criteria}</span>
-                                            </li>
-                                          ))
-                                        : "No criteria available"}
-                                    </ul>
-                                  ) : (
-                                    <p className="text-sm">No criteria available</p>
-                                  )}
-                                </AccordionContent>
-                              </AccordionItem>
-                              <AccordionItem value="exclusion">
-                                <AccordionTrigger className="text-sm">
-                                  Exclusion Criteria
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  {trial.exclusion_criteria ? (
-                                    <ul className="space-y-2 text-sm">
-                                      {typeof trial.exclusion_criteria === "string"
-                                        ? trial.exclusion_criteria
-                                            .split("\n")
-                                            .map((criteria: string, idx: number) => (
-                                              <li key={idx} className="flex gap-2">
-                                                <XCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
-                                                <span>{criteria}</span>
-                                              </li>
-                                            ))
-                                        : Array.isArray(trial.exclusion_criteria)
-                                        ? trial.exclusion_criteria.map((criteria: string, idx: number) => (
-                                            <li key={idx} className="flex gap-2">
-                                              <XCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
-                                              <span>{criteria}</span>
-                                            </li>
-                                          ))
-                                        : "No criteria available"}
-                                    </ul>
-                                  ) : (
-                                    <p className="text-sm">No criteria available</p>
-                                  )}
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
+                            <p className="text-sm text-muted-foreground italic">Detailed eligibility criteria can be found on ClinicalTrials.gov.</p>
                           </div>
 
                           <Button asChild className="gap-2" size="sm">
                             <a
-                              href={`https://clinicaltrials.gov/ct2/show/${trial.nct_id}`}
+                              href={`https://clinicaltrials.gov/ct2/show/${trial.trial_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
